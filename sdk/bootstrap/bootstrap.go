@@ -1,0 +1,145 @@
+package bootstrap
+
+import (
+	"fmt"
+	"time"
+
+	natslib "github.com/nats-io/nats.go"
+
+	"github.com/include2md/eventsdk/sdk"
+	transportnats "github.com/include2md/eventsdk/sdk/internal/transport/nats"
+)
+
+type Options struct {
+	NATSURL string
+	Timeout time.Duration
+}
+
+type Client struct {
+	*sdk.SDKClient
+	conn *natslib.Conn
+	js   natslib.JetStreamContext
+}
+
+type Service struct {
+	*sdk.SDKService
+	conn *natslib.Conn
+}
+
+func NewClient(opts Options) (*Client, error) {
+	nc, js, timeout, err := connect(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	tr, err := transportnats.New(nc, js)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("create nats transport: %w", err)
+	}
+
+	return &Client{
+		SDKClient: sdk.NewClient(tr, timeout),
+		conn:      nc,
+		js:        js,
+	}, nil
+}
+
+func NewService(opts Options) (*Service, error) {
+	nc, js, _, err := connect(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	tr, err := transportnats.New(nc, js)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("create nats transport: %w", err)
+	}
+
+	return &Service{
+		SDKService: sdk.NewService(tr),
+		conn:       nc,
+	}, nil
+}
+
+func (c *Client) Close() {
+	if c != nil && c.conn != nil {
+		c.conn.Close()
+	}
+}
+
+func (c *Client) EnsureStream(streamName string, subjects ...string) error {
+	if c == nil || c.js == nil {
+		return fmt.Errorf("client is not initialized")
+	}
+	if streamName == "" {
+		return fmt.Errorf("stream name is required")
+	}
+
+	info, err := c.js.StreamInfo(streamName)
+	if err == nil {
+		cfg := info.Config
+		existing := make(map[string]struct{}, len(cfg.Subjects))
+		for _, s := range cfg.Subjects {
+			existing[s] = struct{}{}
+		}
+		changed := false
+		for _, s := range subjects {
+			if s == "" {
+				continue
+			}
+			if _, ok := existing[s]; !ok {
+				cfg.Subjects = append(cfg.Subjects, s)
+				changed = true
+			}
+		}
+		if !changed {
+			return nil
+		}
+		_, err = c.js.UpdateStream(&cfg)
+		return err
+	}
+
+	filtered := make([]string, 0, len(subjects))
+	for _, s := range subjects {
+		if s != "" {
+			filtered = append(filtered, s)
+		}
+	}
+	_, err = c.js.AddStream(&natslib.StreamConfig{
+		Name:     streamName,
+		Subjects: filtered,
+	})
+	return err
+}
+
+func (s *Service) Close() {
+	if s != nil && s.conn != nil {
+		s.conn.Close()
+	}
+}
+
+func connect(opts Options) (*natslib.Conn, natslib.JetStreamContext, time.Duration, error) {
+	natsURL := opts.NATSURL
+	if natsURL == "" {
+		natsURL = "nats://127.0.0.1:4222"
+	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
+
+	nc, err := natslib.Connect(natsURL)
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("connect nats: %w", err)
+	}
+
+	js, err := nc.JetStream()
+	if err != nil {
+		nc.Close()
+		return nil, nil, 0, fmt.Errorf("create jetstream: %w", err)
+	}
+
+	return nc, js, timeout, nil
+}

@@ -7,10 +7,8 @@ import (
 	"os"
 	"time"
 
-	natslib "github.com/nats-io/nats.go"
-
 	"github.com/include2md/eventsdk/sdk"
-	transportnats "github.com/include2md/eventsdk/sdk/internal/transport/nats"
+	"github.com/include2md/eventsdk/sdk/bootstrap"
 )
 
 func main() {
@@ -20,23 +18,11 @@ func main() {
 	eventSubject := fmt.Sprintf("%s.user.event.*", namespace)
 	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
-	nc, err := natslib.Connect(natsURL)
+	service, err := bootstrap.NewService(bootstrap.Options{NATSURL: natsURL})
 	if err != nil {
-		log.Fatalf("connect nats: %v", err)
+		log.Fatalf("new service: %v", err)
 	}
-	defer nc.Close()
-
-	js, err := nc.JetStream()
-	if err != nil {
-		log.Fatalf("create jetstream: %v", err)
-	}
-
-	transport, err := transportnats.New(nc, js)
-	if err != nil {
-		log.Fatalf("create transport: %v", err)
-	}
-
-	service := sdk.NewService(transport)
+	defer service.Close()
 	log.Printf("consumer started event_subject=%s command_subject=%s", eventSubject, commandSubject)
 
 	err = service.Subscribe(ctx, eventSubject, envOr("SDK_CONSUMER_NAME", fmt.Sprintf("subject-consumer-%d", time.Now().UnixNano())), func(ctx context.Context, msg sdk.Message) error {

@@ -10,10 +10,7 @@ import (
 	"os"
 	"time"
 
-	natslib "github.com/nats-io/nats.go"
-
-	"github.com/include2md/eventsdk/sdk"
-	transportnats "github.com/include2md/eventsdk/sdk/internal/transport/nats"
+	"github.com/include2md/eventsdk/sdk/bootstrap"
 )
 
 type commandRequest struct {
@@ -39,23 +36,11 @@ func main() {
 	mockBaseURL := envOr("MOCK_API_BASE_URL", "http://127.0.0.1:18080")
 	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
-	nc, err := natslib.Connect(natsURL)
+	service, err := bootstrap.NewService(bootstrap.Options{NATSURL: natsURL})
 	if err != nil {
-		log.Fatalf("connect nats: %v", err)
+		log.Fatalf("new service: %v", err)
 	}
-	defer nc.Close()
-
-	js, err := nc.JetStream()
-	if err != nil {
-		log.Fatalf("create jetstream: %v", err)
-	}
-
-	transport, err := transportnats.New(nc, js)
-	if err != nil {
-		log.Fatalf("create transport: %v", err)
-	}
-
-	service := sdk.NewService(transport)
+	defer service.Close()
 	log.Printf("adapter listening subject=%s nats=%s mock_api=%s", commandSubject, natsURL, mockBaseURL)
 
 	err = service.HandleRequest(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {

@@ -1,6 +1,9 @@
 # Runnable Examples (Subject-Only)
 
 This SDK now uses subject-first APIs.
+Examples use simplified bootstrap helpers:
+- `bootstrap.NewClient(...)`
+- `bootstrap.NewService(...)`
 
 ## Prerequisites
 
