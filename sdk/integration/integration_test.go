@@ -12,11 +12,10 @@ import (
 	natslib "github.com/nats-io/nats.go"
 
 	"github.com/include2md/eventsdk/sdk"
-	"github.com/include2md/eventsdk/sdk/internal/subject"
 	transportnats "github.com/include2md/eventsdk/sdk/internal/transport/nats"
 )
 
-func TestCommandFlowRequestReply(t *testing.T) {
+func TestSubjectFlowRequestReply(t *testing.T) {
 	ns := envOr("SDK_NAMESPACE", "TW.XX")
 	nc, js := mustConnect(t)
 	defer nc.Close()
@@ -25,35 +24,27 @@ func TestCommandFlowRequestReply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new transport: %v", err)
 	}
-	resolver := subject.NewResolver(ns)
-	client := sdk.NewClient(tr, resolver, 3*time.Second)
+	client := sdk.NewClient(tr, 3*time.Second)
+	service := sdk.NewService(tr)
 
-	commandSubject, err := resolver.CommandSubject("CreateMessage")
-	if err != nil {
-		t.Fatalf("resolve command subject: %v", err)
-	}
-
-	// Local responder validates Core NATS request/reply path.
-	sub, err := nc.Subscribe(commandSubject, func(msg *natslib.Msg) {
-		_ = msg.Respond([]byte(`{"status":"ok"}`))
+	subject := fmt.Sprintf("%s.user.command.create", ns)
+	err = service.HandleRequest(context.Background(), subject, func(ctx context.Context, request []byte) ([]byte, error) {
+		return []byte(`{"ok":true,"message":"processed"}`), nil
 	})
 	if err != nil {
-		t.Fatalf("subscribe responder: %v", err)
+		t.Fatalf("handle request: %v", err)
 	}
-	defer sub.Unsubscribe()
 
-	_, err = client.SendCommand(context.Background(), sdk.Command{
-		Name: "CreateMessage",
-		Payload: map[string]any{
-			"title": "hello",
-		},
-	})
+	reply, err := client.Request(context.Background(), subject, map[string]any{"title": "hello"})
 	if err != nil {
-		t.Fatalf("send command: %v", err)
+		t.Fatalf("request: %v", err)
+	}
+	if string(reply) == "" {
+		t.Fatal("expected reply")
 	}
 }
 
-func TestEventFlowPublishConsume(t *testing.T) {
+func TestSubjectFlowPublishSubscribe(t *testing.T) {
 	ns := envOr("SDK_NAMESPACE", "TW.XX")
 	nc, js := mustConnect(t)
 	defer nc.Close()
@@ -63,35 +54,25 @@ func TestEventFlowPublishConsume(t *testing.T) {
 		t.Fatalf("new transport: %v", err)
 	}
 
-	if err := ensureStream(js, envOr("SDK_STREAM", "SDK_EVENTS"), fmt.Sprintf("%s.sdk.event.*", ns)); err != nil {
+	subject := fmt.Sprintf("%s.user.event.created", ns)
+	if err := ensureStream(js, envOr("SDK_STREAM", "SDK_EVENTS"), fmt.Sprintf("%s.user.event.*", ns)); err != nil {
 		t.Fatalf("ensure stream: %v", err)
 	}
 
-	resolver := subject.NewResolver(ns)
-	client := sdk.NewClient(tr, resolver, 3*time.Second)
-	service := sdk.NewService(tr, resolver, 3)
+	client := sdk.NewClient(tr, 3*time.Second)
+	service := sdk.NewService(tr)
 
 	handled := make(chan struct{}, 1)
-	service.RegisterHandler("UserRegistered", func(ctx context.Context, payload []byte) error {
+	err = service.Subscribe(context.Background(), fmt.Sprintf("%s.user.event.*", ns), fmt.Sprintf("sdk-consumer-%d", time.Now().UnixNano()), func(ctx context.Context, msg sdk.Message) error {
 		handled <- struct{}{}
 		return nil
 	})
-
-	runErr := service.Run(context.Background(), sdk.RunConfig{
-		Namespace:    ns,
-		ConsumerName: fmt.Sprintf("sdk-consumer-%d", time.Now().UnixNano()),
-	})
-	if runErr != nil {
-		t.Fatalf("service run: %v", runErr)
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
 	}
 
-	if err := client.PublishEvent(context.Background(), sdk.Event{
-		Type: "UserRegistered",
-		Payload: map[string]any{
-			"user_id": "u-1",
-		},
-	}); err != nil {
-		t.Fatalf("publish event: %v", err)
+	if err := client.Publish(context.Background(), subject, map[string]any{"user_id": "u-1"}); err != nil {
+		t.Fatalf("publish: %v", err)
 	}
 
 	select {
@@ -120,9 +101,17 @@ func mustConnect(t *testing.T) (*natslib.Conn, natslib.JetStreamContext) {
 }
 
 func ensureStream(js natslib.JetStreamContext, streamName, subject string) error {
-	_, err := js.StreamInfo(streamName)
+	info, err := js.StreamInfo(streamName)
 	if err == nil {
-		return nil
+		for _, s := range info.Config.Subjects {
+			if s == subject {
+				return nil
+			}
+		}
+		cfg := info.Config
+		cfg.Subjects = append(cfg.Subjects, subject)
+		_, err = js.UpdateStream(&cfg)
+		return err
 	}
 
 	_, err = js.AddStream(&natslib.StreamConfig{

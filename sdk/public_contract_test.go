@@ -11,23 +11,24 @@ func TestPublicContracts(t *testing.T) {
 	var _ sdk.Client = (*fakeClient)(nil)
 	var _ sdk.Service = (*fakeService)(nil)
 
-	_ = sdk.Command{Name: "CreateMessage", Payload: map[string]any{"x": 1}}
-	_ = sdk.Event{Type: "UserRegistered", Payload: map[string]any{"id": "u1"}}
-
-	cfg := sdk.RunConfig{ConsumerName: "consumer", Namespace: "TW.XX"}
-	if cfg.ConsumerName == "" || cfg.Namespace == "" {
-		t.Fatal("run config should expose required fields")
+	msg := sdk.Message{Subject: "TW.XX.user.created", Payload: []byte(`{}`)}
+	if msg.Subject == "" {
+		t.Fatal("message should expose subject")
 	}
 }
 
 type fakeClient struct{}
 
-func (f *fakeClient) SendCommand(ctx context.Context, cmd sdk.Command) ([]byte, error) {
+func (f *fakeClient) Publish(ctx context.Context, subject string, payload any) error { return nil }
+func (f *fakeClient) Request(ctx context.Context, subject string, payload any) ([]byte, error) {
 	return nil, nil
 }
-func (f *fakeClient) PublishEvent(ctx context.Context, event sdk.Event) error { return nil }
 
 type fakeService struct{}
 
-func (f *fakeService) RegisterHandler(eventType string, handler sdk.Handler) {}
-func (f *fakeService) Run(ctx context.Context, cfg sdk.RunConfig) error      { return nil }
+func (f *fakeService) Subscribe(ctx context.Context, subject string, consumerName string, handler sdk.Handler) error {
+	return nil
+}
+func (f *fakeService) HandleRequest(ctx context.Context, subject string, handler sdk.RequestHandler) error {
+	return nil
+}

@@ -7,72 +7,56 @@ import (
 	"time"
 
 	"github.com/include2md/eventsdk/sdk/internal/envelope"
-	"github.com/include2md/eventsdk/sdk/internal/subject"
 )
 
 type SDKClient struct {
 	transport Transport
-	resolver  subject.Resolver
 	timeout   time.Duration
 }
 
-func NewClient(transport Transport, resolver subject.Resolver, timeout time.Duration) *SDKClient {
-	return &SDKClient{
-		transport: transport,
-		resolver:  resolver,
-		timeout:   timeout,
-	}
+func NewClient(transport Transport, timeout time.Duration) *SDKClient {
+	return &SDKClient{transport: transport, timeout: timeout}
 }
 
-func (c *SDKClient) SendCommand(ctx context.Context, cmd Command) ([]byte, error) {
-	subjectName, err := c.resolver.CommandSubject(cmd.Name)
+func (c *SDKClient) Request(ctx context.Context, subject string, payload any) ([]byte, error) {
+	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal request payload: %w", err)
 	}
-
-	payload, err := json.Marshal(cmd.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshal command payload: %w", err)
-	}
-
-	return c.transport.Request(ctx, subjectName, payload, c.timeout)
+	return c.transport.Request(ctx, subject, body, c.timeout)
 }
 
-func (c *SDKClient) PublishEvent(ctx context.Context, event Event) error {
-	env, err := envelope.NewEventEnvelope(event.Type, event.Payload, event.CorrelationID)
+func (c *SDKClient) Publish(ctx context.Context, subject string, payload any) error {
+	env, err := envelope.NewEventEnvelope(subject, payload, "")
 	if err != nil {
 		return err
 	}
 
-	payload, err := envelope.Marshal(env)
+	body, err := envelope.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("marshal event envelope: %w", err)
+		return fmt.Errorf("marshal envelope: %w", err)
 	}
 
-	subjectName := c.resolver.EventSubject(event.Type)
-	if err := c.transport.Publish(ctx, subjectName, payload); err != nil {
+	if err := c.transport.Publish(ctx, subject, body); err != nil {
 		return err
 	}
 
-	return c.executeBridge(ctx, event, env.CorrelationID)
+	return c.executeInboxBridge(ctx, env.CorrelationID, payload)
 }
 
-func (c *SDKClient) executeBridge(ctx context.Context, event Event, correlationID string) error {
-	payload, ok := mapToInboxCreatePayload(event.Payload)
+func (c *SDKClient) executeInboxBridge(ctx context.Context, correlationID string, payload any) error {
+	mapped, ok := mapToInboxCreatePayload(payload)
 	if !ok {
 		return nil
 	}
 
-	replyData, err := c.SendCommand(ctx, Command{
-		Name:          "CreateMessage",
-		Payload:       payload,
-		CorrelationID: correlationID,
-	})
+	replyData, err := c.Request(ctx, "TW.XX.inbox.command.create", mapped)
 	if err != nil {
 		return nil
 	}
 
 	_ = validateBridgeReply(replyData)
+	_ = correlationID
 	return nil
 }
 
@@ -98,6 +82,7 @@ func mapToInboxCreatePayload(payload any) (map[string]any, bool) {
 	if p.UserID == "" || p.MessageID == "" || p.Title == "" || p.Description == "" || p.Category == "" || p.Box == "" {
 		return nil, false
 	}
+
 	return map[string]any{
 		"userId":      p.UserID,
 		"messageId":   p.MessageID,

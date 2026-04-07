@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	natslib "github.com/nats-io/nats.go"
@@ -66,7 +67,8 @@ func (t *Transport) Subscribe(ctx context.Context, subject string, durable strin
 
 	_, err := t.js.Subscribe(subject, func(msg *natslib.Msg) {
 		delivery := sdk.Delivery{
-			Data: msg.Data,
+			Subject: msg.Subject,
+			Data:    msg.Data,
 			Ack: func() error {
 				return msg.Ack()
 			},
@@ -78,4 +80,28 @@ func (t *Transport) Subscribe(ctx context.Context, subject string, durable strin
 	}
 
 	return nil
+}
+
+func (t *Transport) HandleRequest(ctx context.Context, subject string, handler sdk.RequestHandler) error {
+	if t.conn == nil {
+		return fmt.Errorf("nats conn is nil")
+	}
+	if t.conn.Status() != natslib.CONNECTED {
+		return fmt.Errorf("nats conn is not connected")
+	}
+
+	_, err := t.conn.Subscribe(subject, func(msg *natslib.Msg) {
+		response, hErr := handler(ctx, msg.Data)
+		if hErr != nil {
+			response = []byte(`{"ok":false,"error":` + strconv.Quote(hErr.Error()) + `}`)
+		}
+		if msg.Reply != "" {
+			_ = msg.Respond(response)
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("nats request subscribe failed: %w", err)
+	}
+
+	return t.conn.Flush()
 }

@@ -1,6 +1,6 @@
-# Runnable Examples
+# Runnable Examples (Subject-Only)
 
-These examples follow the current SDK structure and can run directly.
+This SDK now uses subject-first APIs.
 
 ## Prerequisites
 
@@ -16,11 +16,14 @@ docker compose up -d --build
 - `SDK_STREAM` (default `SDK_EVENTS`)
 - `SDK_CONSUMER_NAME` (consumer only)
 
-## Run consumer
+## Run consumer (event + command adapter)
 
 ```bash
 go run ./sdk/examples/consumer
 ```
+
+- Subscribes to events: `<namespace>.user.event.*`
+- Handles request-reply commands: `<namespace>.user.command.create`
 
 ## Run producer
 
@@ -28,13 +31,21 @@ go run ./sdk/examples/consumer
 go run ./sdk/examples/producer
 ```
 
-Producer publishes `UserRegistered`. Consumer receives and prints payload.
+## Try request-reply manually
 
-## Inbox bridge behavior
+After consumer is running:
 
-No bridge rule configuration is required.
+```bash
+nats req "TW.XX.user.command.create" '{"name":"demo"}' -s nats://127.0.0.1:4222
+```
 
-When `PublishEvent` payload contains all inbox create required fields below, SDK internally calls inbox command `CreateMessage`:
+You should receive a JSON reply from the adapter handler.
+
+## Inbox bridge convention
+
+No bridge configuration is required.
+
+When published payload contains all fields below, SDK internally sends inbox `CreateMessage` command:
 - `userId`
 - `messageId`
 - `title`

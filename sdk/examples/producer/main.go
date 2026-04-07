@@ -10,7 +10,6 @@ import (
 	natslib "github.com/nats-io/nats.go"
 
 	"github.com/include2md/eventsdk/sdk"
-	"github.com/include2md/eventsdk/sdk/internal/subject"
 	transportnats "github.com/include2md/eventsdk/sdk/internal/transport/nats"
 )
 
@@ -22,17 +21,6 @@ type UserRegistered struct {
 	Category    string `json:"category"`
 	Box         string `json:"box"`
 	Email       string `json:"email"`
-}
-
-type UserPublisher struct {
-	client *sdk.SDKClient
-}
-
-func (p *UserPublisher) PublishUserRegistered(ctx context.Context, event UserRegistered) error {
-	return p.client.PublishEvent(ctx, sdk.Event{
-		Type:    "UserRegistered",
-		Payload: event,
-	})
 }
 
 func main() {
@@ -51,7 +39,8 @@ func main() {
 		log.Fatalf("create jetstream: %v", err)
 	}
 
-	if err := ensureStream(js, envOr("SDK_STREAM", "SDK_EVENTS"), fmt.Sprintf("%s.sdk.event.*", namespace)); err != nil {
+	eventSubject := fmt.Sprintf("%s.user.event.registered", namespace)
+	if err := ensureStream(js, envOr("SDK_STREAM", "SDK_EVENTS"), fmt.Sprintf("%s.user.event.*", namespace)); err != nil {
 		log.Fatalf("ensure stream: %v", err)
 	}
 
@@ -60,10 +49,8 @@ func main() {
 		log.Fatalf("create transport: %v", err)
 	}
 
-	client := sdk.NewClient(transport, subject.NewResolver(namespace), 3*time.Second)
-
-	publisher := &UserPublisher{client: client}
-	if err := publisher.PublishUserRegistered(ctx, UserRegistered{
+	client := sdk.NewClient(transport, 3*time.Second)
+	event := UserRegistered{
 		UserID:      "u-1",
 		MessageID:   "m-1001",
 		Title:       "Welcome",
@@ -71,19 +58,30 @@ func main() {
 		Category:    "system",
 		Box:         "primary",
 		Email:       "u1@example.com",
-	}); err != nil {
-		log.Fatalf("publish user registered: %v", err)
 	}
 
-	log.Println("published UserRegistered")
+	if err := client.Publish(ctx, eventSubject, event); err != nil {
+		log.Fatalf("publish subject: %v", err)
+	}
+
+	log.Printf("published subject=%s", eventSubject)
 }
 
 func ensureStream(js natslib.JetStreamContext, streamName, subjectPattern string) error {
-	if _, err := js.StreamInfo(streamName); err == nil {
-		return nil
+	info, err := js.StreamInfo(streamName)
+	if err == nil {
+		for _, s := range info.Config.Subjects {
+			if s == subjectPattern {
+				return nil
+			}
+		}
+		cfg := info.Config
+		cfg.Subjects = append(cfg.Subjects, subjectPattern)
+		_, err = js.UpdateStream(&cfg)
+		return err
 	}
 
-	_, err := js.AddStream(&natslib.StreamConfig{
+	_, err = js.AddStream(&natslib.StreamConfig{
 		Name:     streamName,
 		Subjects: []string{subjectPattern},
 	})

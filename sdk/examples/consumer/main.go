@@ -10,7 +10,6 @@ import (
 	natslib "github.com/nats-io/nats.go"
 
 	"github.com/include2md/eventsdk/sdk"
-	"github.com/include2md/eventsdk/sdk/internal/subject"
 	transportnats "github.com/include2md/eventsdk/sdk/internal/transport/nats"
 )
 
@@ -18,6 +17,8 @@ func main() {
 	ctx := context.Background()
 	natsURL := envOr("NATS_URL", "nats://127.0.0.1:4222")
 	namespace := envOr("SDK_NAMESPACE", "TW.XX")
+	eventSubject := fmt.Sprintf("%s.user.event.*", namespace)
+	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
 	nc, err := natslib.Connect(natsURL)
 	if err != nil {
@@ -35,21 +36,25 @@ func main() {
 		log.Fatalf("create transport: %v", err)
 	}
 
-	service := sdk.NewService(transport, subject.NewResolver(namespace), 3)
-	service.RegisterHandler("UserRegistered", func(ctx context.Context, payload []byte) error {
-		log.Printf("received UserRegistered payload=%s", string(payload))
+	service := sdk.NewService(transport)
+	log.Printf("consumer started event_subject=%s command_subject=%s", eventSubject, commandSubject)
+
+	err = service.Subscribe(ctx, eventSubject, envOr("SDK_CONSUMER_NAME", fmt.Sprintf("subject-consumer-%d", time.Now().UnixNano())), func(ctx context.Context, msg sdk.Message) error {
+		log.Printf("received subject=%s event_id=%s correlation_id=%s payload=%s", msg.Subject, msg.EventID, msg.CorrelationID, string(msg.Payload))
 		return nil
 	})
-
-	log.Println("consumer started")
-	if err := service.Run(ctx, sdk.RunConfig{
-		Namespace:    namespace,
-		ConsumerName: envOr("SDK_CONSUMER_NAME", fmt.Sprintf("user-registered-consumer-%d", time.Now().UnixNano())),
-	}); err != nil {
-		log.Fatalf("run service: %v", err)
+	if err != nil {
+		log.Fatalf("subscribe: %v", err)
 	}
 
-	// Keep process alive to continuously receive events.
+	err = service.HandleRequest(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
+		log.Printf("received command subject=%s payload=%s", commandSubject, string(request))
+		return []byte(`{"ok":true,"message":"adapter processed"}`), nil
+	})
+	if err != nil {
+		log.Fatalf("handle request: %v", err)
+	}
+
 	select {}
 }
 

@@ -6,22 +6,24 @@ import (
 )
 
 type Client interface {
-	SendCommand(ctx context.Context, cmd Command) ([]byte, error)
-	PublishEvent(ctx context.Context, event Event) error
+	Publish(ctx context.Context, subject string, payload any) error
+	Request(ctx context.Context, subject string, payload any) ([]byte, error)
 }
 
 type Service interface {
-	RegisterHandler(eventType string, handler Handler)
-	Run(ctx context.Context, cfg RunConfig) error
+	Subscribe(ctx context.Context, subject string, consumerName string, handler Handler) error
+	HandleRequest(ctx context.Context, subject string, handler RequestHandler) error
 }
 
 type Delivery struct {
-	Data []byte
-	Ack  func() error
+	Subject string
+	Data    []byte
+	Ack     func() error
 }
 
 type Transport interface {
 	Request(ctx context.Context, subject string, data []byte, timeout time.Duration) ([]byte, error)
 	Publish(ctx context.Context, subject string, data []byte) error
 	Subscribe(ctx context.Context, subject string, durable string, handler func(context.Context, Delivery) error) error
+	HandleRequest(ctx context.Context, subject string, handler RequestHandler) error
 }

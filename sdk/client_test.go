@@ -9,33 +9,32 @@ import (
 
 	"github.com/include2md/eventsdk/sdk"
 	"github.com/include2md/eventsdk/sdk/internal/envelope"
-	"github.com/include2md/eventsdk/sdk/internal/subject"
 )
 
-func TestClientSendCommand(t *testing.T) {
+func TestClientRequest(t *testing.T) {
 	tr := &fakeTransport{requestResp: []byte(`{"ok":true}`)}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
+	c := sdk.NewClient(tr, time.Second)
 
-	_, err := c.SendCommand(context.Background(), sdk.Command{Name: "CreateMessage", Payload: map[string]any{"title": "hi"}})
+	_, err := c.Request(context.Background(), "TW.XX.user.command.create", map[string]any{"title": "hi"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if tr.requestSubject != "TW.XX.inbox.command.create" {
+	if tr.requestSubject != "TW.XX.user.command.create" {
 		t.Fatalf("unexpected subject: %s", tr.requestSubject)
 	}
 }
 
-func TestClientPublishEventPublishesEnvelope(t *testing.T) {
+func TestClientPublishWrapsEnvelope(t *testing.T) {
 	tr := &fakeTransport{}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
+	c := sdk.NewClient(tr, time.Second)
 
-	err := c.PublishEvent(context.Background(), sdk.Event{Type: "UserRegistered", Payload: map[string]any{"id": "u1"}})
+	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{"id": "u1"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 
-	if tr.publishSubject != "TW.XX.sdk.event.UserRegistered" {
+	if tr.publishSubject != "TW.XX.user.event.created" {
 		t.Fatalf("unexpected subject: %s", tr.publishSubject)
 	}
 
@@ -43,90 +42,61 @@ func TestClientPublishEventPublishesEnvelope(t *testing.T) {
 	if err := json.Unmarshal(tr.publishData, &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v", err)
 	}
-	if env.EventType != "UserRegistered" || env.EventID == "" || env.CorrelationID == "" {
+	if env.EventType != "TW.XX.user.event.created" || env.EventID == "" || env.CorrelationID == "" {
 		t.Fatalf("unexpected envelope: %+v", env)
 	}
 }
 
-func TestClientPublishEventInboxBridgeAutoTriggeredWhenPayloadMatches(t *testing.T) {
+func TestClientPublishAutoBridgeWhenPayloadMatchesInboxCreate(t *testing.T) {
 	tr := &fakeTransport{requestResp: []byte(`{"ok":true}`)}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
+	c := sdk.NewClient(tr, time.Second)
 
-	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type: "AnyBusinessEvent",
-		Payload: map[string]any{
-			"userId":      "u1",
-			"messageId":   "m1",
-			"title":       "hello",
-			"description": "world",
-			"category":    "billing",
-			"box":         "primary",
-		},
+	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{
+		"userId":      "u1",
+		"messageId":   "m1",
+		"title":       "hello",
+		"description": "world",
+		"category":    "billing",
+		"box":         "primary",
 	})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if tr.requestSubject != "TW.XX.inbox.command.create" {
-		t.Fatalf("unexpected bridge request subject: %s", tr.requestSubject)
+		t.Fatalf("unexpected bridge subject: %s", tr.requestSubject)
 	}
 }
 
-func TestClientPublishEventInboxBridgeSkippedWhenPayloadMissingRequiredFields(t *testing.T) {
+func TestClientPublishSkipBridgeWhenPayloadMissingRequiredFields(t *testing.T) {
 	tr := &fakeTransport{}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
+	c := sdk.NewClient(tr, time.Second)
 
-	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type:    "AnyBusinessEvent",
-		Payload: map[string]any{"title": "hello"},
-	})
+	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{"title": "hello"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
 	if tr.requestSubject != "" {
-		t.Fatalf("bridge should be skipped, got request subject: %s", tr.requestSubject)
+		t.Fatalf("expected no bridge request, got: %s", tr.requestSubject)
 	}
 }
 
-func TestClientPublishEventFailsWhenDomainPublishFails(t *testing.T) {
+func TestClientPublishFailsWhenDomainPublishFails(t *testing.T) {
 	tr := &fakeTransport{publishErr: errors.New("publish failed")}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
+	c := sdk.NewClient(tr, time.Second)
 
-	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type: "AnyBusinessEvent",
-		Payload: map[string]any{
-			"userId":      "u1",
-			"messageId":   "m1",
-			"title":       "hello",
-			"description": "world",
-			"category":    "billing",
-			"box":         "primary",
-		},
+	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{
+		"userId":      "u1",
+		"messageId":   "m1",
+		"title":       "hello",
+		"description": "world",
+		"category":    "billing",
+		"box":         "primary",
 	})
 	if err == nil {
 		t.Fatal("expected publish error")
 	}
 	if tr.requestSubject != "" {
-		t.Fatalf("bridge should not execute when publish fails, got request to %s", tr.requestSubject)
-	}
-}
-
-func TestClientPublishEventBridgeReplyNotOKDoesNotFailPublishResult(t *testing.T) {
-	tr := &fakeTransport{requestResp: []byte(`{"ok":false,"code":"BAD_REQUEST","message":"bad request"}`)}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-
-	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type: "AnyBusinessEvent",
-		Payload: map[string]any{
-			"userId":      "u1",
-			"messageId":   "m1",
-			"title":       "hello",
-			"description": "world",
-			"category":    "billing",
-			"box":         "primary",
-		},
-	})
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
+		t.Fatalf("bridge should not run after publish failure, got %s", tr.requestSubject)
 	}
 }
 
@@ -157,5 +127,9 @@ func (f *fakeTransport) Publish(ctx context.Context, subject string, data []byte
 }
 
 func (f *fakeTransport) Subscribe(ctx context.Context, subject string, durable string, handler func(context.Context, sdk.Delivery) error) error {
+	return nil
+}
+
+func (f *fakeTransport) HandleRequest(ctx context.Context, subject string, handler sdk.RequestHandler) error {
 	return nil
 }

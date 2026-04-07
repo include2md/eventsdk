@@ -7,34 +7,37 @@ import (
 
 	"github.com/include2md/eventsdk/sdk"
 	"github.com/include2md/eventsdk/sdk/internal/envelope"
-	"github.com/include2md/eventsdk/sdk/internal/subject"
 )
 
-func TestServiceRunDispatchesEventAndAck(t *testing.T) {
+func TestServiceSubscribeDispatchesEnvelopeAndAck(t *testing.T) {
 	tr := &fakeServiceTransport{}
-	svc := sdk.NewService(tr, subject.NewResolver("TW.XX"), 3)
+	svc := sdk.NewService(tr)
 
 	handled := false
-	svc.RegisterHandler("UserRegistered", func(ctx context.Context, payload []byte) error {
-		handled = true
-		return nil
-	})
-
-	raw, _ := envelope.Marshal(envelope.EventEnvelope{EventType: "UserRegistered", Payload: map[string]any{"id": "u1"}, Attempt: 1})
+	raw, _ := envelope.Marshal(envelope.EventEnvelope{EventType: "TW.XX.user.event.created", Payload: map[string]any{"id": "u1"}, Attempt: 1, EventID: "e1", CorrelationID: "c1", Timestamp: time.Now().UTC()})
 	tr.nextDelivery = sdk.Delivery{
-		Data: raw,
+		Subject: "TW.XX.user.event.created",
+		Data:    raw,
 		Ack: func() error {
 			tr.acked = true
 			return nil
 		},
 	}
 
-	err := svc.Run(context.Background(), sdk.RunConfig{Namespace: "TW.XX", ConsumerName: "consumer-a"})
+	err := svc.Subscribe(context.Background(), "TW.XX.user.event.*", "consumer-a", func(ctx context.Context, msg sdk.Message) error {
+		handled = true
+		if msg.Subject != "TW.XX.user.event.created" {
+			t.Fatalf("unexpected subject: %s", msg.Subject)
+		}
+		if msg.EventID != "e1" || msg.CorrelationID != "c1" {
+			t.Fatalf("unexpected metadata: %+v", msg)
+		}
+		return nil
+	})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-
-	if tr.subscribeSubject != "TW.XX.sdk.event.*" {
+	if tr.subscribeSubject != "TW.XX.user.event.*" {
 		t.Fatalf("unexpected subscribe subject: %s", tr.subscribeSubject)
 	}
 	if !handled {
@@ -45,29 +48,34 @@ func TestServiceRunDispatchesEventAndAck(t *testing.T) {
 	}
 }
 
+func TestServiceHandleRequest(t *testing.T) {
+	tr := &fakeServiceTransport{}
+	svc := sdk.NewService(tr)
+
+	err := svc.HandleRequest(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+		return []byte(`{"ok":true}`), nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if tr.handleRequestSubject != "TW.XX.user.command.create" {
+		t.Fatalf("unexpected request subject: %s", tr.handleRequestSubject)
+	}
+}
+
 type fakeServiceTransport struct {
-	requestSubject string
-	requestData    []byte
-	requestResp    []byte
-
-	publishSubject string
-	publishData    []byte
-
-	subscribeSubject string
-	subscribeDurable string
-	nextDelivery     sdk.Delivery
-	acked            bool
+	subscribeSubject     string
+	subscribeDurable     string
+	nextDelivery         sdk.Delivery
+	acked                bool
+	handleRequestSubject string
 }
 
 func (f *fakeServiceTransport) Request(ctx context.Context, subject string, data []byte, timeout time.Duration) ([]byte, error) {
-	f.requestSubject = subject
-	f.requestData = data
-	return f.requestResp, nil
+	return nil, nil
 }
 
 func (f *fakeServiceTransport) Publish(ctx context.Context, subject string, data []byte) error {
-	f.publishSubject = subject
-	f.publishData = data
 	return nil
 }
 
@@ -75,4 +83,9 @@ func (f *fakeServiceTransport) Subscribe(ctx context.Context, subject string, du
 	f.subscribeSubject = subject
 	f.subscribeDurable = durable
 	return handler(ctx, f.nextDelivery)
+}
+
+func (f *fakeServiceTransport) HandleRequest(ctx context.Context, subject string, handler sdk.RequestHandler) error {
+	f.handleRequestSubject = subject
+	return nil
 }

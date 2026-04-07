@@ -1,17 +1,18 @@
 package sdk
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
-type Command struct {
-	Name          string
-	Payload       any
+type Handler func(ctx context.Context, msg Message) error
+type RequestHandler func(ctx context.Context, request []byte) ([]byte, error)
+
+type Message struct {
+	Subject       string
+	EventID       string
 	CorrelationID string
+	Timestamp     time.Time
+	Attempt       int
+	Payload       []byte
 }
-
-type Event struct {
-	Type          string
-	Payload       any
-	CorrelationID string
-}
-
-type Handler func(ctx context.Context, payload []byte) error
