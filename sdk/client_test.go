@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -27,7 +26,7 @@ func TestClientSendCommand(t *testing.T) {
 	}
 }
 
-func TestClientPublishEvent(t *testing.T) {
+func TestClientPublishEventPublishesEnvelope(t *testing.T) {
 	tr := &fakeTransport{}
 	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
 
@@ -49,27 +48,20 @@ func TestClientPublishEvent(t *testing.T) {
 	}
 }
 
-func TestClientPublishEventBridgeSuccessDefaultMode(t *testing.T) {
+func TestClientPublishEventInboxBridgeAutoTriggeredWhenPayloadMatches(t *testing.T) {
 	tr := &fakeTransport{requestResp: []byte(`{"ok":true}`)}
 	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"userId":      "u1",
-				"messageId":   "m1",
-				"title":       "hello",
-				"description": "world",
-				"category":    "billing",
-				"box":         "primary",
-			}, nil
-		},
-	})
 
 	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type:    "UserRegistered",
-		Payload: map[string]any{"id": "u1"},
+		Type: "AnyBusinessEvent",
+		Payload: map[string]any{
+			"userId":      "u1",
+			"messageId":   "m1",
+			"title":       "hello",
+			"description": "world",
+			"category":    "billing",
+			"box":         "primary",
+		},
 	})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -79,82 +71,36 @@ func TestClientPublishEventBridgeSuccessDefaultMode(t *testing.T) {
 	}
 }
 
-func TestClientPublishEventBridgeFailureDefaultModeStillReturnsNil(t *testing.T) {
-	tr := &fakeTransport{requestErr: errors.New("bridge request failed")}
+func TestClientPublishEventInboxBridgeSkippedWhenPayloadMissingRequiredFields(t *testing.T) {
+	tr := &fakeTransport{}
 	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"userId":      "u1",
-				"messageId":   "m1",
-				"title":       "hello",
-				"description": "world",
-				"category":    "billing",
-				"box":         "primary",
-			}, nil
-		},
-	})
 
 	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type:    "UserRegistered",
-		Payload: map[string]any{"id": "u1"},
+		Type:    "AnyBusinessEvent",
+		Payload: map[string]any{"title": "hello"},
 	})
 	if err != nil {
-		t.Fatalf("expected nil in default mode, got %v", err)
+		t.Fatalf("unexpected err: %v", err)
 	}
-}
-
-func TestClientPublishEventBridgeFailureStrictModeReturnsError(t *testing.T) {
-	tr := &fakeTransport{requestErr: errors.New("bridge request failed")}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	c.SetBridgeMode(sdk.BridgeModeStrict)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"userId":      "u1",
-				"messageId":   "m1",
-				"title":       "hello",
-				"description": "world",
-				"category":    "billing",
-				"box":         "primary",
-			}, nil
-		},
-	})
-
-	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type:    "UserRegistered",
-		Payload: map[string]any{"id": "u1"},
-	})
-	if err == nil {
-		t.Fatal("expected error in strict mode")
+	if tr.requestSubject != "" {
+		t.Fatalf("bridge should be skipped, got request subject: %s", tr.requestSubject)
 	}
 }
 
 func TestClientPublishEventFailsWhenDomainPublishFails(t *testing.T) {
 	tr := &fakeTransport{publishErr: errors.New("publish failed")}
 	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"userId":      "u1",
-				"messageId":   "m1",
-				"title":       "hello",
-				"description": "world",
-				"category":    "billing",
-				"box":         "primary",
-			}, nil
-		},
-	})
 
 	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type:    "UserRegistered",
-		Payload: map[string]any{"id": "u1"},
+		Type: "AnyBusinessEvent",
+		Payload: map[string]any{
+			"userId":      "u1",
+			"messageId":   "m1",
+			"title":       "hello",
+			"description": "world",
+			"category":    "billing",
+			"box":         "primary",
+		},
 	})
 	if err == nil {
 		t.Fatal("expected publish error")
@@ -164,108 +110,23 @@ func TestClientPublishEventFailsWhenDomainPublishFails(t *testing.T) {
 	}
 }
 
-func TestClientPublishEventBridgeObserverNotifiedOnFailure(t *testing.T) {
-	tr := &fakeTransport{requestErr: errors.New("bridge request failed")}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	obs := &fakeBridgeObserver{}
-	c.SetBridgeObserver(obs)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"userId":      "u1",
-				"messageId":   "m1",
-				"title":       "hello",
-				"description": "world",
-				"category":    "billing",
-				"box":         "primary",
-			}, nil
-		},
-	})
-
-	err := c.PublishEvent(context.Background(), sdk.Event{
-		Type:    "UserRegistered",
-		Payload: map[string]any{"id": "u1"},
-	})
-	if err != nil {
-		t.Fatalf("expected nil in default mode, got %v", err)
-	}
-	if obs.failureCalls != 1 {
-		t.Fatalf("expected failure observer call, got %d", obs.failureCalls)
-	}
-}
-
-func TestClientPublishEventBridgeCreatePayloadValidationDefaultMode(t *testing.T) {
-	tr := &fakeTransport{}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	obs := &fakeBridgeObserver{}
-	c.SetBridgeObserver(obs)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"title": "hello",
-			}, nil
-		},
-	})
-
-	err := c.PublishEvent(context.Background(), sdk.Event{Type: "UserRegistered", Payload: map[string]any{"id": "u1"}})
-	if err != nil {
-		t.Fatalf("expected nil in default mode, got %v", err)
-	}
-	if tr.requestSubject != "" {
-		t.Fatal("bridge request should not be sent for invalid payload")
-	}
-	if obs.failureCalls != 1 {
-		t.Fatalf("expected observer failure call, got %d", obs.failureCalls)
-	}
-}
-
-func TestClientPublishEventBridgeCreatePayloadValidationStrictMode(t *testing.T) {
-	tr := &fakeTransport{}
-	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	c.SetBridgeMode(sdk.BridgeModeStrict)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{"title": "hello"}, nil
-		},
-	})
-
-	err := c.PublishEvent(context.Background(), sdk.Event{Type: "UserRegistered", Payload: map[string]any{"id": "u1"}})
-	if err == nil {
-		t.Fatal("expected error in strict mode")
-	}
-	if !strings.Contains(err.Error(), "missing required field") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestClientPublishEventBridgeReplyNotOK(t *testing.T) {
+func TestClientPublishEventBridgeReplyNotOKDoesNotFailPublishResult(t *testing.T) {
 	tr := &fakeTransport{requestResp: []byte(`{"ok":false,"code":"BAD_REQUEST","message":"bad request"}`)}
 	c := sdk.NewClient(tr, subject.NewResolver("TW.XX"), time.Second)
-	c.SetBridgeMode(sdk.BridgeModeStrict)
-	c.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			return map[string]any{
-				"userId":      "u1",
-				"messageId":   "m1",
-				"title":       "hello",
-				"description": "world",
-				"category":    "billing",
-				"box":         "primary",
-			}, nil
+
+	err := c.PublishEvent(context.Background(), sdk.Event{
+		Type: "AnyBusinessEvent",
+		Payload: map[string]any{
+			"userId":      "u1",
+			"messageId":   "m1",
+			"title":       "hello",
+			"description": "world",
+			"category":    "billing",
+			"box":         "primary",
 		},
 	})
-
-	err := c.PublishEvent(context.Background(), sdk.Event{Type: "UserRegistered", Payload: map[string]any{"id": "u1"}})
-	if err == nil {
-		t.Fatal("expected strict mode error when bridge reply is not ok")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
 	}
 }
 
@@ -297,17 +158,4 @@ func (f *fakeTransport) Publish(ctx context.Context, subject string, data []byte
 
 func (f *fakeTransport) Subscribe(ctx context.Context, subject string, durable string, handler func(context.Context, sdk.Delivery) error) error {
 	return nil
-}
-
-type fakeBridgeObserver struct {
-	successCalls int
-	failureCalls int
-}
-
-func (f *fakeBridgeObserver) OnBridgeSuccess(ctx context.Context, eventType string, correlationID string, commandName string) {
-	f.successCalls++
-}
-
-func (f *fakeBridgeObserver) OnBridgeFailure(ctx context.Context, eventType string, correlationID string, commandName string, err error) {
-	f.failureCalls++
 }

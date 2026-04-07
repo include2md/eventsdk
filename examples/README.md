@@ -19,3 +19,6 @@ Environment variables:
 - `SDK_NAMESPACE` (default `TW.XX`)
 - `SDK_STREAM` (producer)
 - `SDK_CONSUMER_NAME` (consumer)
+
+Inbox bridge is convention-based and automatic. If event payload includes
+`userId/messageId/title/description/category/box`, SDK will internally send inbox `CreateMessage`.

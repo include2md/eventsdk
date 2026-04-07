@@ -29,3 +29,15 @@ go run ./sdk/examples/producer
 ```
 
 Producer publishes `UserRegistered`. Consumer receives and prints payload.
+
+## Inbox bridge behavior
+
+No bridge rule configuration is required.
+
+When `PublishEvent` payload contains all inbox create required fields below, SDK internally calls inbox command `CreateMessage`:
+- `userId`
+- `messageId`
+- `title`
+- `description`
+- `category`
+- `box`

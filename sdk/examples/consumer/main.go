@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	natslib "github.com/nats-io/nats.go"
 
@@ -42,7 +44,7 @@ func main() {
 	log.Println("consumer started")
 	if err := service.Run(ctx, sdk.RunConfig{
 		Namespace:    namespace,
-		ConsumerName: envOr("SDK_CONSUMER_NAME", "user-registered-consumer"),
+		ConsumerName: envOr("SDK_CONSUMER_NAME", fmt.Sprintf("user-registered-consumer-%d", time.Now().UnixNano())),
 	}); err != nil {
 		log.Fatalf("run service: %v", err)
 	}

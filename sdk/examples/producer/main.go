@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -17,8 +15,13 @@ import (
 )
 
 type UserRegistered struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
+	UserID      string `json:"userId"`
+	MessageID   string `json:"messageId"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	Box         string `json:"box"`
+	Email       string `json:"email"`
 }
 
 type UserPublisher struct {
@@ -58,31 +61,17 @@ func main() {
 	}
 
 	client := sdk.NewClient(transport, subject.NewResolver(namespace), 3*time.Second)
-	client.SetBridgeObserver(logBridgeObserver{})
-
-	// Internal bridge: when UserRegistered is published, SDK additionally issues inbox CreateMessage command.
-	client.RegisterBridgeRule(sdk.BridgeRule{
-		EventType:   "UserRegistered",
-		CommandName: "CreateMessage",
-		MapPayload: func(event sdk.Event) (any, error) {
-			evt, _ := event.Payload.(UserRegistered)
-			msgID, err := newMessageID()
-			if err != nil {
-				return nil, err
-			}
-			return map[string]any{
-				"userId":      evt.UserID,
-				"messageId":   msgID,
-				"title":       "Welcome",
-				"description": "Welcome to EventSDK",
-				"category":    "system",
-				"box":         "primary",
-			}, nil
-		},
-	})
 
 	publisher := &UserPublisher{client: client}
-	if err := publisher.PublishUserRegistered(ctx, UserRegistered{UserID: "u-1", Email: "u1@example.com"}); err != nil {
+	if err := publisher.PublishUserRegistered(ctx, UserRegistered{
+		UserID:      "u-1",
+		MessageID:   "m-1001",
+		Title:       "Welcome",
+		Description: "Welcome to EventSDK",
+		Category:    "system",
+		Box:         "primary",
+		Email:       "u1@example.com",
+	}); err != nil {
 		log.Fatalf("publish user registered: %v", err)
 	}
 
@@ -106,22 +95,4 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func newMessageID() (string, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return "msg_" + hex.EncodeToString(b), nil
-}
-
-type logBridgeObserver struct{}
-
-func (logBridgeObserver) OnBridgeSuccess(ctx context.Context, eventType string, correlationID string, commandName string) {
-	log.Printf("bridge success eventType=%s correlationID=%s command=%s", eventType, correlationID, commandName)
-}
-
-func (logBridgeObserver) OnBridgeFailure(ctx context.Context, eventType string, correlationID string, commandName string, err error) {
-	log.Printf("bridge failure eventType=%s correlationID=%s command=%s err=%v", eventType, correlationID, commandName, err)
 }
