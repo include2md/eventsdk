@@ -1,0 +1,20 @@
+services:
+  mock-api:
+    build:
+      context: ..
+      dockerfile: sdk/demo/mockapi/Dockerfile
+    container_name: eventsdk-mock-api
+    ports:
+      - "18080:18080"
+
+  adapter:
+    build:
+      context: ..
+      dockerfile: sdk/demo/adapter/Dockerfile
+    container_name: eventsdk-adapter
+    environment:
+      NATS_URL: nats://host.docker.internal:4222
+      SDK_NAMESPACE: TW.XX
+      MOCK_API_BASE_URL: http://mock-api:18080
+    depends_on:
+      - mock-api

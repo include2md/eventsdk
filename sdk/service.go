@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/include2md/eventsdk/sdk/internal/envelope"
 )
@@ -49,5 +50,39 @@ func (s *SDKService) Subscribe(ctx context.Context, subject string, consumerName
 }
 
 func (s *SDKService) HandleRequest(ctx context.Context, subject string, handler RequestHandler) error {
-	return s.transport.HandleRequest(ctx, subject, handler)
+	return s.transport.HandleRequest(ctx, subject, func(ctx context.Context, request []byte) ([]byte, error) {
+		response, err := handler(ctx, request)
+		if err != nil {
+			return nil, err
+		}
+
+		s.tryInboxBridge(ctx, request)
+		return response, nil
+	})
+}
+
+func (s *SDKService) tryInboxBridge(ctx context.Context, request []byte) {
+	var payload any
+	if err := json.Unmarshal(request, &payload); err != nil {
+		return
+	}
+
+	mapped, ok := mapToInboxCreatePayload(payload)
+	if !ok {
+		return
+	}
+
+	reply, err := s.transport.Request(ctx, inboxCreateSubject, mustMarshal(mapped), 3*time.Second)
+	if err != nil {
+		return
+	}
+	_ = validateBridgeReply(reply)
+}
+
+func mustMarshal(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
 }

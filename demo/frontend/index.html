@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EventSDK Request Demo</title>
+  <style>
+    body { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; background: #f7f9fc; color: #1f2937; }
+    .card { max-width: 860px; background: white; border: 1px solid #dbe3ef; border-radius: 12px; padding: 18px; box-shadow: 0 8px 30px rgba(15,23,42,.06); }
+    h1 { margin: 0 0 12px 0; font-size: 20px; }
+    .row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin: 10px 0; align-items: center; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    input, textarea { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    textarea { min-height: 140px; }
+    button { background: #111827; color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; margin-right: 8px; }
+    .muted { color: #64748b; font-size: 13px; }
+    pre { background: #0b1220; color: #dbeafe; border-radius: 10px; padding: 12px; overflow: auto; min-height: 120px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Front-end Request/Reply Demo</h1>
+    <p class="muted">Open this file directly, connect to NATS WebSocket, send command request, and read adapter reply.</p>
+
+    <div class="row">
+      <label for="server">NATS WS URL</label>
+      <input id="server" value="ws://127.0.0.1:9222" />
+    </div>
+    <div class="row">
+      <label for="subject">Subject</label>
+      <input id="subject" value="TW.XX.user.command.create" />
+    </div>
+    <div class="row"><label for="userId">userId</label><input id="userId" value="u-frontend" /></div>
+    <div class="row"><label for="messageId">messageId</label><input id="messageId" value="m-frontend" /></div>
+    <div class="row"><label for="title">title</label><input id="title" value="hello" /></div>
+    <div class="row"><label for="description">description</label><input id="description" value="from frontend" /></div>
+    <div class="row"><label for="category">category</label><input id="category" value="system" /></div>
+    <div class="row"><label for="box">box</label><input id="box" value="primary" /></div>
+
+    <div style="margin: 10px 0 14px 0;">
+      <button id="connectBtn">Connect</button>
+      <button id="requestBtn">Send Request</button>
+    </div>
+
+    <div class="row" style="align-items: start;">
+      <label>Output</label>
+      <pre id="output"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import { connect, StringCodec } from "https://esm.sh/nats.ws@1.30.3";
+
+    const out = document.getElementById("output");
+    const serverEl = document.getElementById("server");
+    const subjectEl = document.getElementById("subject");
+    const userIdEl = document.getElementById("userId");
+    const messageIdEl = document.getElementById("messageId");
+    const titleEl = document.getElementById("title");
+    const descriptionEl = document.getElementById("description");
+    const categoryEl = document.getElementById("category");
+    const boxEl = document.getElementById("box");
+    const connectBtn = document.getElementById("connectBtn");
+    const requestBtn = document.getElementById("requestBtn");
+    const sc = StringCodec();
+    let nc = null;
+
+    function log(line) {
+      out.textContent += (out.textContent ? "\n" : "") + line;
+    }
+
+    connectBtn.onclick = async () => {
+      try {
+        nc = await connect({ servers: serverEl.value.trim() });
+        log("connected: " + serverEl.value.trim());
+      } catch (e) {
+        log("connect error: " + e.message);
+      }
+    };
+
+    requestBtn.onclick = async () => {
+      if (!nc) {
+        log("not connected");
+        return;
+      }
+      try {
+        const subject = subjectEl.value.trim();
+        const payloadObj = {
+          userId: userIdEl.value.trim(),
+          messageId: messageIdEl.value.trim(),
+          title: titleEl.value.trim(),
+          description: descriptionEl.value.trim(),
+          category: categoryEl.value.trim(),
+          box: boxEl.value.trim(),
+        };
+        const msg = await nc.request(subject, sc.encode(JSON.stringify(payloadObj)), { timeout: 5000 });
+        log("reply: " + sc.decode(msg.data));
+      } catch (e) {
+        log("request error: " + e.message);
+      }
+    };
+  </script>
+</body>
+</html>
