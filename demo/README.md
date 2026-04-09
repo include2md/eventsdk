@@ -30,7 +30,7 @@ Then:
 1. Click `Connect`
 2. Click `Send Request`
 3. You should see reply JSON from adapter, which includes data from mock-api.
-4. If payload includes `userId/messageId/title/description/category/box`, SDK in `HandleRequest` will internally trigger inbox create.
+4. If payload includes `userId/messageId/title/description/category/box`, SDK in `Respond` will internally trigger inbox create.
 
 Default request subject:
 - `TW.XX.user.command.create`

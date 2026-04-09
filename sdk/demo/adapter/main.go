@@ -36,14 +36,14 @@ func main() {
 	mockBaseURL := envOr("MOCK_API_BASE_URL", "http://127.0.0.1:18080")
 	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
-	service, err := bootstrap.NewService(bootstrap.Options{NATSURL: natsURL})
+	service, err := bootstrap.NewClient(bootstrap.Options{NATSURL: natsURL})
 	if err != nil {
 		log.Fatalf("new service: %v", err)
 	}
 	defer service.Close()
 	log.Printf("adapter listening subject=%s nats=%s mock_api=%s", commandSubject, natsURL, mockBaseURL)
 
-	err = service.HandleRequest(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
+	err = service.Respond(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
 		if len(request) == 0 {
 			return nil, fmt.Errorf("empty request payload")
 		}

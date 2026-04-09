@@ -9,9 +9,9 @@
 
 ### 2. 三個核心角色
 - **Client**
-    - 負責發送 `Publish` / `Request`
+    - 負責發送 `Emit` / `Request`
 - **Service**
-    - 負責接收 `Subscribe` / `HandleRequest`
+    - 負責接收 `Listen` / `Respond`
 - **Transport**
     - 抽象底層（NATS / JetStream）
 
@@ -23,7 +23,7 @@
 - 路徑：`/sdk/client.go`
 
 **核心功能**
-- `Publish`
+- `Emit`
     - 將 payload 包成 envelope 後送到 JetStream
 - `Request`
     - 使用 request-reply 模式直接發送
@@ -34,11 +34,11 @@
 - 路徑：`/sdk/service.go`
 
 **核心功能**
-- `Subscribe`
+- `Listen`
     - 解 envelope
     - 轉成 `sdk.Message`
     - 最後執行 Ack
-- `HandleRequest`
+- `Respond`
     - 註冊 command handler
     - 回傳 reply
 
@@ -103,7 +103,7 @@ sequenceDiagram
     participant T as Transport(NATS/JS)
     participant S as JetStream
 
-    App->>C: Publish(ctx, subject, payload)
+    App->>C: Emit(ctx, subject, payload)
     C->>E: NewEventEnvelope(subject, payload, "")
     E-->>C: envelope(event_id, correlation_id, timestamp, attempt=1)
     C->>E: Marshal(envelope)
@@ -143,7 +143,7 @@ sequenceDiagram
     participant N as NATS
     participant Inbox as Inbox Service
 
-    App->>SDK: Publish(...) or HandleRequest(...)
+    App->>SDK: Emit(...) or Respond(...)
     SDK->>M: try map payload
     alt required fields complete
         M-->>SDK: mapped payload

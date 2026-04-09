@@ -26,7 +26,51 @@ func (c *SDKClient) Request(ctx context.Context, subject string, payload any) ([
 	return c.transport.Request(ctx, subject, body, c.timeout)
 }
 
-func (c *SDKClient) Publish(ctx context.Context, subject string, payload any) error {
+func (c *SDKClient) Listen(ctx context.Context, subject string, consumerName string, handler Handler) error {
+	return c.transport.Subscribe(ctx, subject, consumerName, func(ctx context.Context, delivery Delivery) error {
+		env, err := envelope.Unmarshal(delivery.Data)
+		if err != nil {
+			return fmt.Errorf("unmarshal envelope: %w", err)
+		}
+
+		payload, err := json.Marshal(env.Payload)
+		if err != nil {
+			return fmt.Errorf("marshal payload: %w", err)
+		}
+
+		if err := handler(ctx, Message{
+			Subject:       delivery.Subject,
+			EventID:       env.EventID,
+			CorrelationID: env.CorrelationID,
+			Timestamp:     env.Timestamp,
+			Attempt:       env.Attempt,
+			Payload:       payload,
+		}); err != nil {
+			return err
+		}
+
+		if delivery.Ack != nil {
+			if err := delivery.Ack(); err != nil {
+				return fmt.Errorf("ack message: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+func (c *SDKClient) Respond(ctx context.Context, subject string, handler RequestHandler) error {
+	return c.transport.HandleRequest(ctx, subject, func(ctx context.Context, request []byte) ([]byte, error) {
+		response, err := handler(ctx, request)
+		if err != nil {
+			return nil, err
+		}
+
+		c.bridgeInboxFromRequest(ctx, request)
+		return response, nil
+	})
+}
+
+func (c *SDKClient) Emit(ctx context.Context, subject string, payload any) error {
 	env, err := envelope.NewEventEnvelope(subject, payload, "")
 	if err != nil {
 		return err
@@ -41,23 +85,38 @@ func (c *SDKClient) Publish(ctx context.Context, subject string, payload any) er
 		return err
 	}
 
-	return c.executeInboxBridge(ctx, env.CorrelationID, payload)
+	return c.bridgeInboxFromPayload(ctx, payload, c.timeout)
 }
 
-func (c *SDKClient) executeInboxBridge(ctx context.Context, correlationID string, payload any) error {
+func (c *SDKClient) bridgeInboxFromRequest(ctx context.Context, request []byte) {
+	var payload any
+	if err := json.Unmarshal(request, &payload); err != nil {
+		return
+	}
+
+	_ = c.bridgeInboxFromPayload(ctx, payload, 3*time.Second)
+}
+
+func (c *SDKClient) bridgeInboxFromPayload(ctx context.Context, payload any, timeout time.Duration) error {
 	mapped, ok := mapToInboxCreatePayload(payload)
 	if !ok {
 		return nil
 	}
 
-	replyData, err := c.Request(ctx, inboxCreateSubject, mapped)
+	reply, err := c.transport.Request(ctx, inboxCreateSubject, mustMarshal(mapped), timeout)
 	if err != nil {
 		return nil
 	}
-
-	_ = validateBridgeReply(replyData)
-	_ = correlationID
+	_ = validateBridgeReply(reply)
 	return nil
+}
+
+func mustMarshal(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 func validateBridgeReply(replyData []byte) error {

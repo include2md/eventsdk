@@ -21,11 +21,6 @@ type Client struct {
 	js   natslib.JetStreamContext
 }
 
-type Service struct {
-	*sdk.SDKService
-	conn *natslib.Conn
-}
-
 func NewClient(opts Options) (*Client, error) {
 	nc, js, timeout, err := connect(opts)
 	if err != nil {
@@ -42,24 +37,6 @@ func NewClient(opts Options) (*Client, error) {
 		SDKClient: sdk.NewClient(tr, timeout),
 		conn:      nc,
 		js:        js,
-	}, nil
-}
-
-func NewService(opts Options) (*Service, error) {
-	nc, js, _, err := connect(opts)
-	if err != nil {
-		return nil, err
-	}
-
-	tr, err := transportnats.New(nc, js)
-	if err != nil {
-		nc.Close()
-		return nil, fmt.Errorf("create nats transport: %w", err)
-	}
-
-	return &Service{
-		SDKService: sdk.NewService(tr),
-		conn:       nc,
 	}, nil
 }
 
@@ -112,12 +89,6 @@ func (c *Client) EnsureStream(streamName string, subjects ...string) error {
 		Subjects: filtered,
 	})
 	return err
-}
-
-func (s *Service) Close() {
-	if s != nil && s.conn != nil {
-		s.conn.Close()
-	}
 }
 
 func connect(opts Options) (*natslib.Conn, natslib.JetStreamContext, time.Duration, error) {

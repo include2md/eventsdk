@@ -12,7 +12,7 @@ import (
 
 func TestServiceSubscribeDispatchesEnvelopeAndAck(t *testing.T) {
 	tr := &fakeServiceTransport{}
-	svc := sdk.NewService(tr)
+	svc := sdk.NewClient(tr, time.Second)
 
 	handled := false
 	raw, _ := envelope.Marshal(envelope.EventEnvelope{EventType: "TW.XX.user.event.created", Payload: map[string]any{"id": "u1"}, Attempt: 1, EventID: "e1", CorrelationID: "c1", Timestamp: time.Now().UTC()})
@@ -25,7 +25,7 @@ func TestServiceSubscribeDispatchesEnvelopeAndAck(t *testing.T) {
 		},
 	}
 
-	err := svc.Subscribe(context.Background(), "TW.XX.user.event.*", "consumer-a", func(ctx context.Context, msg sdk.Message) error {
+	err := svc.Listen(context.Background(), "TW.XX.user.event.*", "consumer-a", func(ctx context.Context, msg sdk.Message) error {
 		handled = true
 		if msg.Subject != "TW.XX.user.event.created" {
 			t.Fatalf("unexpected subject: %s", msg.Subject)
@@ -51,9 +51,9 @@ func TestServiceSubscribeDispatchesEnvelopeAndAck(t *testing.T) {
 
 func TestServiceHandleRequest(t *testing.T) {
 	tr := &fakeServiceTransport{nextRequest: []byte(`{"name":"x"}`)}
-	svc := sdk.NewService(tr)
+	svc := sdk.NewClient(tr, time.Second)
 
-	err := svc.HandleRequest(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+	err := svc.Respond(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
 		return []byte(`{"ok":true}`), nil
 	})
 	if err != nil {
@@ -69,9 +69,9 @@ func TestServiceHandleRequest(t *testing.T) {
 
 func TestServiceHandleRequestAutoBridgeAfterSuccess(t *testing.T) {
 	tr := &fakeServiceTransport{nextRequest: []byte(`{"userId":"u1","messageId":"m1","title":"hello","description":"world","category":"billing","box":"primary"}`), requestResp: []byte(`{"ok":true}`)}
-	svc := sdk.NewService(tr)
+	svc := sdk.NewClient(tr, time.Second)
 
-	err := svc.HandleRequest(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+	err := svc.Respond(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
 		return []byte(`{"ok":true}`), nil
 	})
 	if err != nil {
@@ -84,9 +84,9 @@ func TestServiceHandleRequestAutoBridgeAfterSuccess(t *testing.T) {
 
 func TestServiceHandleRequestNoBridgeWhenHandlerFails(t *testing.T) {
 	tr := &fakeServiceTransport{nextRequest: []byte(`{"userId":"u1","messageId":"m1","title":"hello","description":"world","category":"billing","box":"primary"}`)}
-	svc := sdk.NewService(tr)
+	svc := sdk.NewClient(tr, time.Second)
 
-	err := svc.HandleRequest(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+	err := svc.Respond(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
 		return nil, errors.New("boom")
 	})
 	if err != nil {

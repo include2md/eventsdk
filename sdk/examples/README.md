@@ -3,7 +3,7 @@
 This SDK now uses subject-first APIs.
 Examples use simplified bootstrap helpers:
 - `bootstrap.NewClient(...)`
-- `bootstrap.NewService(...)`
+- `bootstrap.NewClient(...)`
 
 ## Prerequisites
 

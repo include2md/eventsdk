@@ -33,7 +33,7 @@
 3. transport 透過 Core NATS request/reply 發送
 4. error/success 原樣回傳
 
-### Event Publish
+### Event Emit
 1. user 呼叫 `Client.PublishEvent`
 2. SDK 自動建立 envelope metadata
 3. 透過 JetStream publish
@@ -48,7 +48,7 @@
 
 ## Error Handling
 - Command: request timeout/transport/decode 直接回傳
-- Publish: publish failure 直接回傳
+- Emit: publish failure 直接回傳
 - Consume: handler error 走 retry policy
 - Correlation ID: 若 command/event 傳入則沿用，否則 SDK 產生
 

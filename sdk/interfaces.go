@@ -5,16 +5,6 @@ import (
 	"time"
 )
 
-type Client interface {
-	Publish(ctx context.Context, subject string, payload any) error
-	Request(ctx context.Context, subject string, payload any) ([]byte, error)
-}
-
-type Service interface {
-	Subscribe(ctx context.Context, subject string, consumerName string, handler Handler) error
-	HandleRequest(ctx context.Context, subject string, handler RequestHandler) error
-}
-
 type Delivery struct {
 	Subject string
 	Data    []byte

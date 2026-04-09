@@ -18,14 +18,14 @@ func main() {
 	eventSubject := fmt.Sprintf("%s.user.event.*", namespace)
 	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
-	service, err := bootstrap.NewService(bootstrap.Options{NATSURL: natsURL})
+	service, err := bootstrap.NewClient(bootstrap.Options{NATSURL: natsURL})
 	if err != nil {
 		log.Fatalf("new service: %v", err)
 	}
 	defer service.Close()
 	log.Printf("consumer started event_subject=%s command_subject=%s", eventSubject, commandSubject)
 
-	err = service.Subscribe(ctx, eventSubject, envOr("SDK_CONSUMER_NAME", fmt.Sprintf("subject-consumer-%d", time.Now().UnixNano())), func(ctx context.Context, msg sdk.Message) error {
+	err = service.Listen(ctx, eventSubject, envOr("SDK_CONSUMER_NAME", fmt.Sprintf("subject-consumer-%d", time.Now().UnixNano())), func(ctx context.Context, msg sdk.Message) error {
 		log.Printf("received subject=%s event_id=%s correlation_id=%s payload=%s", msg.Subject, msg.EventID, msg.CorrelationID, string(msg.Payload))
 		return nil
 	})
@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("subscribe: %v", err)
 	}
 
-	err = service.HandleRequest(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
+	err = service.Respond(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
 		log.Printf("received command subject=%s payload=%s", commandSubject, string(request))
 		return []byte(`{"ok":true,"message":"adapter processed"}`), nil
 	})

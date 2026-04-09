@@ -29,7 +29,7 @@ func TestClientPublishWrapsEnvelope(t *testing.T) {
 	tr := &fakeTransport{}
 	c := sdk.NewClient(tr, time.Second)
 
-	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{"id": "u1"})
+	err := c.Emit(context.Background(), "TW.XX.user.event.created", map[string]any{"id": "u1"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestClientPublishAutoBridgeWhenPayloadMatchesInboxCreate(t *testing.T) {
 	tr := &fakeTransport{requestResp: []byte(`{"ok":true}`)}
 	c := sdk.NewClient(tr, time.Second)
 
-	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{
+	err := c.Emit(context.Background(), "TW.XX.user.event.created", map[string]any{
 		"userId":      "u1",
 		"messageId":   "m1",
 		"title":       "hello",
@@ -71,7 +71,7 @@ func TestClientPublishSkipBridgeWhenPayloadMissingRequiredFields(t *testing.T) {
 	tr := &fakeTransport{}
 	c := sdk.NewClient(tr, time.Second)
 
-	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{"title": "hello"})
+	err := c.Emit(context.Background(), "TW.XX.user.event.created", map[string]any{"title": "hello"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestClientPublishFailsWhenDomainPublishFails(t *testing.T) {
 	tr := &fakeTransport{publishErr: errors.New("publish failed")}
 	c := sdk.NewClient(tr, time.Second)
 
-	err := c.Publish(context.Background(), "TW.XX.user.event.created", map[string]any{
+	err := c.Emit(context.Background(), "TW.XX.user.event.created", map[string]any{
 		"userId":      "u1",
 		"messageId":   "m1",
 		"title":       "hello",

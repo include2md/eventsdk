@@ -45,7 +45,7 @@ func main() {
 		Email:       "u1@example.com",
 	}
 
-	if err := client.Publish(ctx, eventSubject, event); err != nil {
+	if err := client.Emit(ctx, eventSubject, event); err != nil {
 		log.Fatalf("publish subject: %v", err)
 	}
 

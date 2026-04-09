@@ -25,10 +25,10 @@ func TestSubjectFlowRequestReply(t *testing.T) {
 		t.Fatalf("new transport: %v", err)
 	}
 	client := sdk.NewClient(tr, 3*time.Second)
-	service := sdk.NewService(tr)
+	service := sdk.NewClient(tr, 3*time.Second)
 
 	subject := fmt.Sprintf("%s.user.command.create", ns)
-	err = service.HandleRequest(context.Background(), subject, func(ctx context.Context, request []byte) ([]byte, error) {
+	err = service.Respond(context.Background(), subject, func(ctx context.Context, request []byte) ([]byte, error) {
 		return []byte(`{"ok":true,"message":"processed"}`), nil
 	})
 	if err != nil {
@@ -60,10 +60,10 @@ func TestSubjectFlowPublishSubscribe(t *testing.T) {
 	}
 
 	client := sdk.NewClient(tr, 3*time.Second)
-	service := sdk.NewService(tr)
+	service := sdk.NewClient(tr, 3*time.Second)
 
 	handled := make(chan struct{}, 1)
-	err = service.Subscribe(context.Background(), fmt.Sprintf("%s.user.event.*", ns), fmt.Sprintf("sdk-consumer-%d", time.Now().UnixNano()), func(ctx context.Context, msg sdk.Message) error {
+	err = service.Listen(context.Background(), fmt.Sprintf("%s.user.event.*", ns), fmt.Sprintf("sdk-consumer-%d", time.Now().UnixNano()), func(ctx context.Context, msg sdk.Message) error {
 		handled <- struct{}{}
 		return nil
 	})
@@ -71,7 +71,7 @@ func TestSubjectFlowPublishSubscribe(t *testing.T) {
 		t.Fatalf("subscribe: %v", err)
 	}
 
-	if err := client.Publish(context.Background(), subject, map[string]any{"user_id": "u-1"}); err != nil {
+	if err := client.Emit(context.Background(), subject, map[string]any{"user_id": "u-1"}); err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 

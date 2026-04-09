@@ -151,7 +151,7 @@ service.Run(ctx, cfg)
 
 ```go
 type MessageAdapter struct {
-    client sdk.Client
+    client *sdk.SDKClient
 }
 
 func (a *MessageAdapter) CreateMessage(ctx context.Context, req CreateMessageRequest) error {
@@ -192,6 +192,7 @@ type Transport interface {
     Publish(...)
     Request(...)
     Subscribe(...)
+    HandleRequest(...)
 }
 ```
 
