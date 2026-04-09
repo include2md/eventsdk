@@ -25,7 +25,7 @@ func main() {
 	namespace := envOr("SDK_NAMESPACE", "TW.XX")
 
 	eventSubject := fmt.Sprintf("%s.user.event.registered", namespace)
-	client, err := bootstrap.NewClient(bootstrap.Options{NATSURL: natsURL})
+	client, err := twsp.NewClient(twsp.Options{NATSURL: natsURL})
 	if err != nil {
 		log.Fatalf("new client: %v", err)
 	}

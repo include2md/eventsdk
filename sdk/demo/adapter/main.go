@@ -36,7 +36,7 @@ func main() {
 	mockBaseURL := envOr("MOCK_API_BASE_URL", "http://127.0.0.1:18080")
 	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
-	service, err := bootstrap.NewClient(bootstrap.Options{NATSURL: natsURL})
+	service, err := twsp.NewClient(twsp.Options{NATSURL: natsURL})
 	if err != nil {
 		log.Fatalf("new service: %v", err)
 	}

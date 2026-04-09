@@ -1,4 +1,4 @@
-package bootstrap
+package twsp
 
 import (
 	"fmt"
@@ -11,8 +11,11 @@ import (
 )
 
 type Options struct {
-	NATSURL string
-	Timeout time.Duration
+	NATSURL  string
+	Timeout  time.Duration
+	Username string
+	Password string
+	Token    string
 }
 
 type Client struct {
@@ -21,8 +24,17 @@ type Client struct {
 	js   natslib.JetStreamContext
 }
 
-func NewClient(opts Options) (*Client, error) {
-	nc, js, timeout, err := connect(opts)
+func NewClient(opts ...Options) (*Client, error) {
+	if len(opts) > 1 {
+		return nil, fmt.Errorf("at most one options argument is allowed")
+	}
+
+	var resolved Options
+	if len(opts) == 1 {
+		resolved = opts[0]
+	}
+
+	nc, js, timeout, err := connect(resolved)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +113,7 @@ func connect(opts Options) (*natslib.Conn, natslib.JetStreamContext, time.Durati
 		timeout = 3 * time.Second
 	}
 
-	nc, err := natslib.Connect(natsURL)
+	nc, err := natslib.Connect(natsURL, natsConnectOptions(opts)...)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("connect nats: %w", err)
 	}
@@ -113,4 +125,14 @@ func connect(opts Options) (*natslib.Conn, natslib.JetStreamContext, time.Durati
 	}
 
 	return nc, js, timeout, nil
+}
+
+func natsConnectOptions(opts Options) []natslib.Option {
+	if opts.Token != "" {
+		return []natslib.Option{natslib.Token(opts.Token)}
+	}
+	if opts.Username != "" || opts.Password != "" {
+		return []natslib.Option{natslib.UserInfo(opts.Username, opts.Password)}
+	}
+	return nil
 }

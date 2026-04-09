@@ -157,3 +157,16 @@ sequenceDiagram
         SDK-->>App: skip bridge
     end
 ```
+
+```
+client, err := twsp.NewClient(twsp.Options{
+    NATSURL:  "nats://127.0.0.1:4222",
+    Username: "demo",
+    Password: "secret",
+})
+
+client, err := twsp.NewClient(twsp.Options{
+    NATSURL: "nats://127.0.0.1:4222",
+    Token:   "my-token",
+})
+```

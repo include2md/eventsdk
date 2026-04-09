@@ -18,7 +18,7 @@ func main() {
 	eventSubject := fmt.Sprintf("%s.user.event.*", namespace)
 	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
 
-	service, err := bootstrap.NewClient(bootstrap.Options{NATSURL: natsURL})
+	service, err := twsp.NewClient(twsp.Options{NATSURL: natsURL})
 	if err != nil {
 		log.Fatalf("new service: %v", err)
 	}
