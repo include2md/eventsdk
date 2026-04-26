@@ -9,14 +9,18 @@ import (
 
 	"github.com/include2md/eventsdk/sdk"
 	"github.com/include2md/eventsdk/sdk/bootstrap"
+	"github.com/include2md/eventsdk/sdk/subject"
 )
 
 func main() {
 	ctx := context.Background()
 	natsURL := envOr("NATS_URL", "nats://127.0.0.1:4222")
-	namespace := envOr("SDK_NAMESPACE", "TW.XX")
-	eventSubject := fmt.Sprintf("%s.user.event.*", namespace)
-	commandSubject := fmt.Sprintf("%s.user.command.create", namespace)
+	appID := envOr("SDK_APP_ID", "tdemo")
+	eventSubject := fmt.Sprintf("evt.app.%s.user.*", appID)
+	commandSubject, err := subject.CmdApp(appID, "user", "create")
+	if err != nil {
+		log.Fatalf("build command subject: %v", err)
+	}
 
 	service, err := twsp.NewClient(twsp.Options{NATSURL: natsURL})
 	if err != nil {

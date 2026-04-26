@@ -14,7 +14,7 @@ docker compose up -d --build
 
 2. Optional env vars:
 - `NATS_URL` (default `nats://127.0.0.1:4222`)
-- `SDK_NAMESPACE` (default `TW.XX`)
+- `SDK_APP_ID` (default `tdemo`)
 - `SDK_STREAM` (default `SDK_EVENTS`)
 - `SDK_CONSUMER_NAME` (consumer only)
 
@@ -24,8 +24,8 @@ docker compose up -d --build
 go run ./sdk/examples/consumer
 ```
 
-- Subscribes to events: `<namespace>.user.event.*`
-- Handles request-reply commands: `<namespace>.user.command.create`
+- Subscribes to events: `evt.app.<app_id>.user.*`
+- Handles request-reply commands: `cmd.app.<app_id>.user.create`
 
 ## Run producer
 
@@ -38,7 +38,7 @@ go run ./sdk/examples/producer
 After consumer is running:
 
 ```bash
-nats req "TW.XX.user.command.create" '{"name":"demo"}' -s nats://127.0.0.1:4222
+nats req "cmd.app.tdemo.user.create" '{"name":"demo"}' -s nats://127.0.0.1:4222
 ```
 
 You should receive a JSON reply from the adapter handler.

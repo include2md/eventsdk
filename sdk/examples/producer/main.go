@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/include2md/eventsdk/sdk/bootstrap"
+	"github.com/include2md/eventsdk/sdk/subject"
 )
 
 type UserRegistered struct {
@@ -22,16 +22,19 @@ type UserRegistered struct {
 func main() {
 	ctx := context.Background()
 	natsURL := envOr("NATS_URL", "nats://127.0.0.1:4222")
-	namespace := envOr("SDK_NAMESPACE", "TW.XX")
+	appID := envOr("SDK_APP_ID", "tdemo")
 
-	eventSubject := fmt.Sprintf("%s.user.event.registered", namespace)
+	eventSubject, err := subject.EvtApp(appID, "user", "registered")
+	if err != nil {
+		log.Fatalf("build event subject: %v", err)
+	}
 	client, err := twsp.NewClient(twsp.Options{NATSURL: natsURL})
 	if err != nil {
 		log.Fatalf("new client: %v", err)
 	}
 	defer client.Close()
 
-	if err := client.EnsureStream(envOr("SDK_STREAM", "SDK_EVENTS"), fmt.Sprintf("%s.user.event.*", namespace)); err != nil {
+	if err := client.EnsureStream(envOr("SDK_STREAM", "SDK_EVENTS"), "evt.app.*.user.*"); err != nil {
 		log.Fatalf("ensure stream: %v", err)
 	}
 
