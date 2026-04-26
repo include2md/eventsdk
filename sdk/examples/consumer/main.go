@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("subscribe: %v", err)
 	}
 
-	err = service.Respond(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
+	err = service.Handle(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
 		log.Printf("received command subject=%s payload=%s", commandSubject, string(request))
 		return []byte(`{"ok":true,"message":"adapter processed"}`), nil
 	})

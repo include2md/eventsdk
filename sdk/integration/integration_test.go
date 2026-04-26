@@ -28,7 +28,7 @@ func TestSubjectFlowRequestReply(t *testing.T) {
 	service := sdk.NewClient(tr, 3*time.Second)
 
 	subject := fmt.Sprintf("%s.user.command.create", ns)
-	err = service.Respond(context.Background(), subject, func(ctx context.Context, request []byte) ([]byte, error) {
+	err = service.Handle(context.Background(), subject, func(ctx context.Context, request []byte) ([]byte, error) {
 		return []byte(`{"ok":true,"message":"processed"}`), nil
 	})
 	if err != nil {

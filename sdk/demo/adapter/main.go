@@ -43,7 +43,7 @@ func main() {
 	defer service.Close()
 	log.Printf("adapter listening subject=%s nats=%s mock_api=%s", commandSubject, natsURL, mockBaseURL)
 
-	err = service.Respond(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
+	err = service.Handle(ctx, commandSubject, func(ctx context.Context, request []byte) ([]byte, error) {
 		if len(request) == 0 {
 			return nil, fmt.Errorf("empty request payload")
 		}

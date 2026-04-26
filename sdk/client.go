@@ -58,7 +58,7 @@ func (c *SDKClient) Listen(ctx context.Context, subject string, consumerName str
 	})
 }
 
-func (c *SDKClient) Respond(ctx context.Context, subject string, handler RequestHandler) error {
+func (c *SDKClient) Handle(ctx context.Context, subject string, handler RequestHandler) error {
 	return c.transport.HandleRequest(ctx, subject, func(ctx context.Context, request []byte) ([]byte, error) {
 		response, err := handler(ctx, request)
 		if err != nil {

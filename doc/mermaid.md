@@ -143,7 +143,7 @@ sequenceDiagram
     participant N as NATS
     participant Inbox as Inbox Service
 
-    App->>SDK: Emit(...) or Respond(...)
+    App->>SDK: Emit(...) or Handle(...)
     SDK->>M: try map payload
     alt required fields complete
         M-->>SDK: mapped payload

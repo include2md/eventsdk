@@ -53,7 +53,7 @@ func TestServiceHandleRequest(t *testing.T) {
 	tr := &fakeServiceTransport{nextRequest: []byte(`{"name":"x"}`)}
 	svc := sdk.NewClient(tr, time.Second)
 
-	err := svc.Respond(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+	err := svc.Handle(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
 		return []byte(`{"ok":true}`), nil
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func TestServiceHandleRequestAutoBridgeAfterSuccess(t *testing.T) {
 	tr := &fakeServiceTransport{nextRequest: []byte(`{"userId":"u1","messageId":"m1","title":"hello","description":"world","category":"billing","box":"primary"}`), requestResp: []byte(`{"ok":true}`)}
 	svc := sdk.NewClient(tr, time.Second)
 
-	err := svc.Respond(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+	err := svc.Handle(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
 		return []byte(`{"ok":true}`), nil
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func TestServiceHandleRequestNoBridgeWhenHandlerFails(t *testing.T) {
 	tr := &fakeServiceTransport{nextRequest: []byte(`{"userId":"u1","messageId":"m1","title":"hello","description":"world","category":"billing","box":"primary"}`)}
 	svc := sdk.NewClient(tr, time.Second)
 
-	err := svc.Respond(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
+	err := svc.Handle(context.Background(), "TW.XX.user.command.create", func(ctx context.Context, request []byte) ([]byte, error) {
 		return nil, errors.New("boom")
 	})
 	if err != nil {
