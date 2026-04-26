@@ -6,16 +6,26 @@ import (
 	"fmt"
 	"time"
 
+	bridgeint "github.com/include2md/eventsdk/sdk/internal/bridge"
 	"github.com/include2md/eventsdk/sdk/internal/envelope"
 )
 
 type SDKClient struct {
 	transport Transport
 	timeout   time.Duration
+	hooks     *bridgeint.Hooks
 }
 
 func NewClient(transport Transport, timeout time.Duration) *SDKClient {
-	return &SDKClient{transport: transport, timeout: timeout}
+	return newClientWithOptions(transport, timeout, bridgeint.Options{})
+}
+
+func newClientWithOptions(transport Transport, timeout time.Duration, opts bridgeint.Options) *SDKClient {
+	return &SDKClient{
+		transport: transport,
+		timeout:   timeout,
+		hooks:     bridgeint.NewHooks(opts),
+	}
 }
 
 func (c *SDKClient) Request(ctx context.Context, subject string, payload any) ([]byte, error) {
@@ -59,15 +69,44 @@ func (c *SDKClient) Listen(ctx context.Context, subject string, consumerName str
 }
 
 func (c *SDKClient) Handle(ctx context.Context, subject string, handler RequestHandler) error {
+	hooks := c.hooksForHandleSubject(subject)
 	return c.transport.HandleRequest(ctx, subject, func(ctx context.Context, request []byte) ([]byte, error) {
+		beforeCtx := &bridgeint.Context{
+			Stage:   bridgeint.StageBeforeHandle,
+			Subject: subject,
+			Request: request,
+		}
+		if err := hooks.Apply(ctx, beforeCtx); err != nil {
+			return nil, err
+		}
+
 		response, err := handler(ctx, request)
 		if err != nil {
 			return nil, err
 		}
 
-		c.bridgeInboxFromRequest(ctx, request)
+		afterCtx := &bridgeint.Context{
+			Stage:    bridgeint.StageAfterHandle,
+			Subject:  subject,
+			Request:  request,
+			Response: response,
+		}
+		_ = hooks.Apply(ctx, afterCtx)
+
 		return response, nil
 	})
+}
+
+func (c *SDKClient) hooksForHandleSubject(handleSubject string) *bridgeint.Hooks {
+	if c.hooks == nil {
+		return nil
+	}
+
+	lifecycleRules, err := bridgeint.BuildHandleLifecycleRules(c.transport, handleSubject)
+	if err == nil {
+		return c.hooks.WithExtraRules(lifecycleRules)
+	}
+	return c.hooks
 }
 
 func (c *SDKClient) Emit(ctx context.Context, subject string, payload any) error {
@@ -86,15 +125,6 @@ func (c *SDKClient) Emit(ctx context.Context, subject string, payload any) error
 	}
 
 	return c.bridgeInboxFromPayload(ctx, payload, c.timeout)
-}
-
-func (c *SDKClient) bridgeInboxFromRequest(ctx context.Context, request []byte) {
-	var payload any
-	if err := json.Unmarshal(request, &payload); err != nil {
-		return
-	}
-
-	_ = c.bridgeInboxFromPayload(ctx, payload, 3*time.Second)
 }
 
 func (c *SDKClient) bridgeInboxFromPayload(ctx context.Context, payload any, timeout time.Duration) error {
