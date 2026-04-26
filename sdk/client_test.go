@@ -47,8 +47,8 @@ func TestClientPublishWrapsEnvelope(t *testing.T) {
 	}
 }
 
-func TestClientPublishAutoBridgeWhenPayloadMatchesInboxCreate(t *testing.T) {
-	tr := &fakeTransport{requestResp: []byte(`{"ok":true}`)}
+func TestClientPublishDoesNotAutoBridgeWhenPayloadMatchesInboxCreate(t *testing.T) {
+	tr := &fakeTransport{}
 	c := sdk.NewClient(tr, time.Second)
 
 	err := c.Emit(context.Background(), "TW.XX.user.event.created", map[string]any{
@@ -62,12 +62,12 @@ func TestClientPublishAutoBridgeWhenPayloadMatchesInboxCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	if tr.requestSubject != "TW.XX.inbox.command.create" {
-		t.Fatalf("unexpected bridge subject: %s", tr.requestSubject)
+	if tr.requestSubject != "" {
+		t.Fatalf("expected no bridge request, got %s", tr.requestSubject)
 	}
 }
 
-func TestClientPublishSkipBridgeWhenPayloadMissingRequiredFields(t *testing.T) {
+func TestClientPublishDoesNotBridgeWhenPayloadMissingRequiredFields(t *testing.T) {
 	tr := &fakeTransport{}
 	c := sdk.NewClient(tr, time.Second)
 
@@ -96,7 +96,7 @@ func TestClientPublishFailsWhenDomainPublishFails(t *testing.T) {
 		t.Fatal("expected publish error")
 	}
 	if tr.requestSubject != "" {
-		t.Fatalf("bridge should not run after publish failure, got %s", tr.requestSubject)
+		t.Fatalf("request should not run after publish failure, got %s", tr.requestSubject)
 	}
 }
 

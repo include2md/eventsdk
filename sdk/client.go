@@ -124,46 +124,5 @@ func (c *SDKClient) Emit(ctx context.Context, subject string, payload any) error
 		return err
 	}
 
-	return c.bridgeInboxFromPayload(ctx, payload, c.timeout)
-}
-
-func (c *SDKClient) bridgeInboxFromPayload(ctx context.Context, payload any, timeout time.Duration) error {
-	mapped, ok := mapToInboxCreatePayload(payload)
-	if !ok {
-		return nil
-	}
-
-	reply, err := c.transport.Request(ctx, inboxCreateSubject, mustMarshal(mapped), timeout)
-	if err != nil {
-		return nil
-	}
-	_ = validateBridgeReply(reply)
-	return nil
-}
-
-func mustMarshal(v any) []byte {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	return b
-}
-
-func validateBridgeReply(replyData []byte) error {
-	if len(replyData) == 0 {
-		return nil
-	}
-
-	var reply struct {
-		OK      *bool  `json:"ok"`
-		Code    string `json:"code"`
-		Message string `json:"message"`
-	}
-	if err := json.Unmarshal(replyData, &reply); err != nil {
-		return nil
-	}
-	if reply.OK != nil && !*reply.OK {
-		return fmt.Errorf("bridge command rejected: code=%s message=%s", reply.Code, reply.Message)
-	}
 	return nil
 }
