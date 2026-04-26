@@ -11,11 +11,14 @@ import (
 )
 
 type Options struct {
-	NATSURL  string
-	Timeout  time.Duration
-	Username string
-	Password string
-	Token    string
+	NATSURL          string
+	Timeout          time.Duration
+	Username         string
+	Password         string
+	Token            string
+	AppID            string
+	ConnectorID      string
+	CloudEventSource string
 }
 
 type Client struct {
@@ -45,8 +48,11 @@ func NewClient(opts ...Options) (*Client, error) {
 		return nil, fmt.Errorf("create nats transport: %w", err)
 	}
 
+	sdkClient := sdk.NewClient(tr, timeout)
+	sdkClient.ConfigureCloudEvent(resolveCloudEventSource(resolved), resolved.AppID)
+
 	return &Client{
-		SDKClient: sdk.NewClient(tr, timeout),
+		SDKClient: sdkClient,
 		conn:      nc,
 		js:        js,
 	}, nil
@@ -135,4 +141,14 @@ func natsConnectOptions(opts Options) []natslib.Option {
 		return []natslib.Option{natslib.UserInfo(opts.Username, opts.Password)}
 	}
 	return nil
+}
+
+func resolveCloudEventSource(opts Options) string {
+	if opts.CloudEventSource != "" {
+		return opts.CloudEventSource
+	}
+	if opts.ConnectorID != "" {
+		return "urn:connector:" + opts.ConnectorID
+	}
+	return ""
 }

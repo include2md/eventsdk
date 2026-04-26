@@ -2,7 +2,6 @@ package sdk
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -243,8 +242,8 @@ func TestServiceHandleBeforePublishRulePublishesEvent(t *testing.T) {
 	if tr.publishCalls[0].subject != "TW.XX.bridge.event.before" {
 		t.Fatalf("unexpected publish subject: %s", tr.publishCalls[0].subject)
 	}
-	var env envelope.EventEnvelope
-	if err := json.Unmarshal(tr.publishCalls[0].data, &env); err != nil {
+	env, err := envelope.Unmarshal(tr.publishCalls[0].data)
+	if err != nil {
 		t.Fatalf("unmarshal envelope: %v", err)
 	}
 	payload, _ := env.Payload.(map[string]any)

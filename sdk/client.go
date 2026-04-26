@@ -14,6 +14,8 @@ type SDKClient struct {
 	transport Transport
 	timeout   time.Duration
 	hooks     *bridgeint.Hooks
+	source    string
+	appID     string
 }
 
 func NewClient(transport Transport, timeout time.Duration) *SDKClient {
@@ -26,6 +28,14 @@ func newClientWithOptions(transport Transport, timeout time.Duration, opts bridg
 		timeout:   timeout,
 		hooks:     bridgeint.NewHooks(opts),
 	}
+}
+
+func (c *SDKClient) ConfigureCloudEvent(source string, appID string) {
+	if c == nil {
+		return
+	}
+	c.source = source
+	c.appID = appID
 }
 
 func (c *SDKClient) Request(ctx context.Context, subject string, payload any) ([]byte, error) {
@@ -113,6 +123,12 @@ func (c *SDKClient) Emit(ctx context.Context, subject string, payload any) error
 	env, err := envelope.NewEventEnvelope(subject, payload, "")
 	if err != nil {
 		return err
+	}
+	if c.source != "" {
+		env.Source = c.source
+	}
+	if c.appID != "" {
+		env.AppID = c.appID
 	}
 
 	body, err := envelope.Marshal(env)

@@ -29,3 +29,20 @@ func TestNATSConnectOptions_TokenTakesPrecedence(t *testing.T) {
 		t.Fatalf("expected one option, got len=%d", len(got))
 	}
 }
+
+func TestResolveCloudEventSource(t *testing.T) {
+	if got := resolveCloudEventSource(Options{}); got != "" {
+		t.Fatalf("expected empty, got %q", got)
+	}
+
+	if got := resolveCloudEventSource(Options{ConnectorID: "consumer-a"}); got != "urn:connector:consumer-a" {
+		t.Fatalf("unexpected source: %q", got)
+	}
+
+	if got := resolveCloudEventSource(Options{
+		ConnectorID:      "consumer-a",
+		CloudEventSource: "urn:connector:explicit",
+	}); got != "urn:connector:explicit" {
+		t.Fatalf("unexpected source: %q", got)
+	}
+}

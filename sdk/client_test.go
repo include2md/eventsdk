@@ -2,7 +2,6 @@ package sdk_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -38,12 +37,34 @@ func TestClientPublishWrapsEnvelope(t *testing.T) {
 		t.Fatalf("unexpected subject: %s", tr.publishSubject)
 	}
 
-	var env envelope.EventEnvelope
-	if err := json.Unmarshal(tr.publishData, &env); err != nil {
+	env, err := envelope.Unmarshal(tr.publishData)
+	if err != nil {
 		t.Fatalf("unmarshal envelope: %v", err)
 	}
 	if env.EventType != "TW.XX.user.event.created" || env.EventID == "" || env.CorrelationID == "" {
 		t.Fatalf("unexpected envelope: %+v", env)
+	}
+}
+
+func TestClientPublishUsesConfiguredCloudEventMetadata(t *testing.T) {
+	tr := &fakeTransport{}
+	c := sdk.NewClient(tr, time.Second)
+	c.ConfigureCloudEvent("urn:connector:demo-consumer", "demo-app")
+
+	err := c.Emit(context.Background(), "TW.XX.user.event.created", map[string]any{"id": "u1"})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	env, err := envelope.Unmarshal(tr.publishData)
+	if err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Source != "urn:connector:demo-consumer" {
+		t.Fatalf("unexpected source: %s", env.Source)
+	}
+	if env.AppID != "demo-app" {
+		t.Fatalf("unexpected appid: %s", env.AppID)
 	}
 }
 
